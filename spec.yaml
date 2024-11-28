@@ -1,0 +1,120 @@
+version: '3.9'
+x-omnistrate-service-plan:
+  name: 'Hosted Valkey w/ High Availability'
+  tenancyType: 'OMNISTRATE_DEDICATED_TENANCY'
+  deployment:
+    hostedDeployment:
+      AwsAccountId: '<>'
+      AwsBootstrapRoleAccountArn: 'arn:aws:iam::<>:role/omnistrate-bootstrap-role'
+      GcpProjectId: '<>'
+      GcpProjectNumber: '<>'
+      GcpServiceAccountEmail: '<>'
+
+services:
+  cluster:
+    image: omnistrate/noop
+    depends_on:
+    - valkey-master
+    - valkey-replica
+    - sentinel
+    x-omnistrate-api-params:
+      - key: numReplicas
+        description: Number of replicas
+        name: Number of Valkey Replicas
+        type: Float64
+        modifiable: true
+        required: false
+        export: true
+        limits:
+          min: 3
+          max: 15
+        defaultValue: "3"
+        parameterDependencyMap:
+          valkey-replica: numReplicas
+      - key: password
+        description: Password for Valkey
+        name: Valkey Password
+        type: Password
+        modifiable: false
+        required: true
+        export: true
+        parameterDependencyMap:
+          valkey-master: password
+          valkey-replica: password
+
+  valkey-master:
+    x-omnistrate-mode-internal: true
+    x-omnistrate-compute:
+      instanceTypes:
+        - cloudProvider: aws
+          name: t4g.small
+        - cloudProvider: gcp
+          name: e2-medium
+    x-omnistrate-api-params:
+      - key: password
+        description: Password for Valkey
+        name: Valkey Password
+        type: Password
+        modifiable: false
+        required: true
+        export: true
+    image: valkey/valkey:8.0.1-alpine
+    command: ["valkey-server", "/etc/valkey/valkey.conf"]
+    deploy:
+      replicas: 1
+    volumes:
+      - ./valkey-master.conf:/etc/valkey/valkey.conf
+    ports:
+      - "6379:6379"
+
+  # Valkey Replica
+  valkey-replica:
+    x-omnistrate-mode-internal: true
+    x-omnistrate-compute:
+      replicaCountAPIParam: numReplicas
+      instanceTypes:
+        - cloudProvider: aws
+          name: t4g.small
+        - cloudProvider: gcp
+          name: e2-medium
+    x-omnistrate-capabilities:
+      enableMultiZone: true
+    x-omnistrate-api-params:
+      - key: numReplicas
+        description: Number of replicas
+        name: Number of Valkey Replicas
+        type: Float64
+        modifiable: true
+        required: true
+        export: true
+      - key: password
+        description: Password for Valkey
+        name: Valkey Password
+        type: Password
+        modifiable: false
+        required: true
+        export: true
+    image: valkey/valkey:8.0.1-alpine
+    command: ["valkey-server", "/etc/valkey/valkey.conf"]
+    volumes:
+      - ./valkey-replica.conf:/etc/valkey/valkey.conf
+    ports:
+      - "6379:6379"
+
+  # Sentinel
+  sentinel:
+    x-omnistrate-mode-internal: true
+    x-omnistrate-compute:
+      instanceTypes:
+        - cloudProvider: aws
+          name: t4g.small
+        - cloudProvider: gcp
+          name: e2-medium
+    x-omnistrate-capabilities:
+      enableMultiZone: true
+    privileged: true
+    deploy:
+      replicas: 3
+    image: omnistrate/valkey:8.0.1-alpine
+    ports:
+      - "26379:26379"

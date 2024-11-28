@@ -1,0 +1,9 @@
+# Use the base Valkey image
+FROM valkey/valkey:8.0.1-alpine
+
+# Define the Sentinel configuration content
+# (This would typically be in a separate sentinel.conf file)
+COPY sentinel.conf /etc/sentinel/sentinel.conf
+
+# Set the command to run Sentinel using the copied configuration file
+CMD ["valkey-sentinel", "/etc/sentinel/sentinel.conf"]
